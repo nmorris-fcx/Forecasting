@@ -88,6 +88,12 @@ git merge initialize
 git push
 ```
 
+12. Update your local version of main
+```ssh
+git checkout main
+git pull
+``
+
 12. How to delete a branch from GitHub, and then from your local
 ```ssh
 git checkout main
