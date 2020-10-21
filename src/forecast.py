@@ -8,19 +8,19 @@ import pandas as pd
 
 class Forecasting():
     """
-    Forecasting layer for a Modeling layer to test the peformance of
-    a model's rolling forecast
+    A base class that is to be inherited by a Modeling class to 
+    produce a model's rolling forecast
 
     Parameters
     ----------
     csv : str
-        CSV file of a data frame ("example.csv")
+        CSV file of a data frame -> "example.csv"
 
     output : str
-        name of column to predict in a model ("Y")
+        name of column to predict in a model -> "Y"
     
     inputs : list of str
-        names of columns to use as features in a model (["X1", "X2"])
+        names of columns to use as features in a model -> ["X1", "X2"]
 
     tune_model : bool, default=False
         should the model hyperparameters be optimized with a grid search?
@@ -42,7 +42,7 @@ class Forecasting():
 
     Attributes
     ----------
-    current_model : sklearn/statsmodels object, None
+    current_model : sklearn Pipeline, None
         the model to make predictions with
     """
     def __init__(self, csv: str, output: str, inputs: list, tune_model: bool=False, 
@@ -85,6 +85,7 @@ class Forecasting():
                              n_forward: int, dropnan: bool=False) -> pd.DataFrame:
         """
         Reshape a data frame such that there are time lagged features
+        Reference: https://machinelearningmastery.com/convert-time-series-supervised-learning-problem-python/
 
         Parameters
         ----------
@@ -127,7 +128,7 @@ class Forecasting():
             agg.dropna(inplace=True)
         return agg
 
-    def reshape_output(self, df: pd.DataFrame) -> pd.DataFrame:
+    def reshape_output(self, df: pd.DataFrame):
         """
         Reshape a data frame such that there are time lagged features
         Split up the data frame into inputs and outputs for modeling

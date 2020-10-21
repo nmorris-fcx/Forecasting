@@ -70,7 +70,7 @@ git push origin initialize
 
 7. Create an issue in GitHub to add source code and test code
 
-8. In VSCode create a src folder and a test folder for building the forecasting module, and add a python file to each
+8. In VSCode create a src folder and a test folder for building the forecasting module, and add an empty __init__.py file to each
 ```ssh
 git add .
 git commit -m "Adding first version of source and test code, #3"
