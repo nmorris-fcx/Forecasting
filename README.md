@@ -52,7 +52,7 @@ git push origin initialize
 
 3. Create an issue in GitHub to update the README file
 
-4. In VSCode update the README.md file with the procedure and push this change to the new branch
+4. In VSCode update the README.md file with procedures and push this change to the new branch
 ```ssh
 git add README.md
 git commit -m "Adding information to README that explains how to set up your local machine to communicate with GitHub, #1"
