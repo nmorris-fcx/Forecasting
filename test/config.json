@@ -1,5 +1,5 @@
 {
-    "csv": "bikes.csv",
+    "csv": "test/bikes.csv",
     "datetime": "datetime",
     "output": "count",
     "inputs": ["season", "holiday", "workingday", "weather", "temp", "atemp", "humidity", "windspeed"],

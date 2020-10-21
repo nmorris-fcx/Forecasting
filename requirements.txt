@@ -7,3 +7,4 @@ xgboost
 tensorflow
 keras
 plotly
+pydantic

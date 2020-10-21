@@ -1,14 +1,15 @@
 """
-Stream data through a forecasting model
+Stream data through a machine learning model to produce a rolling forecast
 
 @author: Nick
 """
 
+from pydantic import BaseModel
 import pandas as pd
 
-class Forecasting():
+class Forecasting(BaseModel):
     """
-    A base class that is to be inherited by a Modeling class to 
+    A base class that is to be inherited by a Machine Learning class to 
     produce a model's rolling forecast
 
     Parameters
@@ -42,22 +43,34 @@ class Forecasting():
 
     Attributes
     ----------
-    current_model : sklearn Pipeline, None
+    _current_model : sklearn Pipeline, None
         the model to make predictions with
+    
+    _data : pandas DataFrame
+        the full data set to stream through a model
     """
-    def __init__(self, csv: str, output: str, inputs: list, tune_model: bool=False, 
-                 train_samples: int=100, history_window: int=10, forecast_window: int=10, 
-                 forecast_frequency: int=1, train_frequency: int=5):
-        self.csv = csv
-        self.output = output
-        self.inputs = inputs
-        self.tune_model = tune_model
-        self.train_samples = train_samples
-        self.history_window = history_window
-        self.forecast_window = forecast_window
-        self.forecast_frequency = forecast_frequency
-        self.train_frequency = train_frequency
-        self.current_model = None
+    # input arguments (**kwarg)
+    csv: str
+    datetime: str
+    output: str
+    inputs: list
+    tune_model: bool=False
+    train_samples: int=100
+    history_window: int=10
+    forecast_window: int=10
+    forecast_frequency: int=1
+    train_frequency: int=5
+
+    # internal attributes (not inputs)
+    __slots__ = ["_current_model", "_data"]
+
+    def __init__(self, **kwarg):
+        """
+        Load the full data set
+        """
+        super().__init__(**kwarg) # type check the input arguments
+        object.__setattr__(self, "_current_model", None) # initial value
+        object.__setattr__(self, "_data", pd.read_csv(self.csv)) # load the data frame
 
     def pull_data(self, df: pd.DataFrame, start: int, end: int) -> pd.DataFrame:
         """
@@ -146,8 +159,10 @@ class Forecasting():
         y : pandas DataFrame
             the forward lagged features (outputs)
         """
+        if df.shape[1] != 1:
+            raise ValueError("'df' must contain exactly 1 column representing the model output")
         df = self.series_to_supervised(df[[self.output]].copy(), self.history_window,
                                        self.forecast_window + 1)
-        y = df.iloc[:, :self.forecast_window]
+        y = df.iloc[:, (self.forecast_window + 1):]
         x = df.drop(columns=y.columns)
         return x, y
