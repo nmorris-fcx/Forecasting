@@ -123,4 +123,4 @@ git commit -m "Completing the first version of the Forecasting class for modelin
 git push origin forecast_class
 ```
 
-5. In GitHub create a pull request to merge forecast_class into main, then do a code review before merging
+5. In GitHub create a pull request to merge forecast_class into main, then do a code review before merging and closing issues
