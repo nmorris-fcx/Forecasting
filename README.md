@@ -92,7 +92,7 @@ git push
 ```ssh
 git checkout main
 git pull
-``
+```
 
 12. How to delete a branch from GitHub, and then from your local
 ```ssh
