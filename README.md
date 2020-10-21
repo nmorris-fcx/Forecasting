@@ -119,7 +119,7 @@ pip install -r requirements.txt
 4. Write and commit code
 ```ssh
 git add .
-git commit -m "Completing the first version of the Forecasting class for modeling"
+git commit -m "Completing the first version of the Forecasting class for modeling, #5"
 git push origin forecast_class
 ```
 
