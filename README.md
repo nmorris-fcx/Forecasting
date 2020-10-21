@@ -88,8 +88,9 @@ git merge initialize
 git push
 ```
 
-12. Update your local with this merge
+12. Update your local version of main
 ```ssh
+git checkout main
 git pull
 ``
 
