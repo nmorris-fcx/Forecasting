@@ -11,7 +11,7 @@ from typing import Union
 from pydantic import BaseModel, root_validator
 import numpy as np
 import pandas as pd
-from statsmodels.tsa.holtwinters import Holt, ExponentialSmoothing
+from statsmodels.tsa.holtwinters import Holt
 
 
 class Forecasting(BaseModel):
@@ -66,17 +66,18 @@ class Forecasting(BaseModel):
     _actual : pandas DataFrame
         the known values to be predicted
     """
+
     # input arguments (**kwarg)
     csv: str
     output: str
-    inputs: Union[list, None]=None
-    datetime: Union[str, None]=None
-    train_samples: int=100
-    history_window: int=10
-    forecast_window: int=10
-    forecast_frequency: int=1
-    train_frequency: int=5
-    tune_model: bool=False
+    inputs: Union[list, None] = None
+    datetime: Union[str, None] = None
+    train_samples: int = 100
+    history_window: int = 10
+    forecast_window: int = 10
+    forecast_frequency: int = 1
+    train_frequency: int = 5
+    tune_model: bool = False
 
     # internal attributes (not inputs)
     __slots__ = ["_model", "_data", "_predictions", "_actual"]
@@ -86,11 +87,11 @@ class Forecasting(BaseModel):
         Validate the input arguments
         Load the full data set
         """
-        super().__init__(**kwarg) # validate the input arguments
-        object.__setattr__(self, "_model", None) # initial value
-        object.__setattr__(self, "_data", pd.read_csv(self.csv)) # load the data
-        object.__setattr__(self, "_predictions", pd.DataFrame()) # initial value
-        object.__setattr__(self, "_actual", pd.DataFrame()) # initial value
+        super().__init__(**kwarg)  # validate the input arguments
+        object.__setattr__(self, "_model", None)  # initial value
+        object.__setattr__(self, "_data", pd.read_csv(self.csv))  # load the data
+        object.__setattr__(self, "_predictions", pd.DataFrame())  # initial value
+        object.__setattr__(self, "_actual", pd.DataFrame())  # initial value
 
     @root_validator
     def value_checks(cls, values):
@@ -102,64 +103,101 @@ class Forecasting(BaseModel):
         # validate csv
         csv = values.get("csv")
         if not csv.endswith(".csv"):
-            raise ValueError("'csv' should be a file name with a .csv extension, got a value of '" +
-                             csv + "' instead")
+            raise ValueError(
+                "'csv' should be a file name with a .csv extension, got a value of '"
+                + csv
+                + "' instead"
+            )
         if not os.path.isfile(csv):
-            raise FileNotFoundError("There is no csv file at '" + os.getcwd() + "/" + csv + "'")
+            raise FileNotFoundError(
+                "There is no csv file at '" + os.getcwd() + "/" + csv + "'"
+            )
         df = pd.read_csv(csv)
-        min_rows = 30
-        if not df.shape[0] >= min_rows:
-            raise ValueError("'csv' should have at least " + str(min_rows) +
-                             " rows, got a value of " + str(df.shape[0]) + " instead")
 
         Y, X, T = values.get("output"), values.get("inputs"), values.get("datetime")
 
         # validate output
         if not Y in df.columns:
-            raise ValueError("'output' should be a column name in 'csv', got a value of '" +
-                             Y + "' instead")
+            raise ValueError(
+                "'output' should be a column name in 'csv', got a value of '"
+                + Y
+                + "' instead"
+            )
 
         # validate inputs
         if not X is None:
             if len(X) == 0:
-                raise ValueError("'inputs' should be a list of column names in 'csv'" +
-                                 " or a value of None, got an empty list instead")
+                raise ValueError(
+                    "'inputs' should be a list of column names in 'csv'"
+                    + " or a value of None, got an empty list instead"
+                )
             not_found = [not x in df.columns for x in X]
             if any(not_found):
                 invalid_names = np.array(X)[np.where(not_found)[0]].tolist()
-                raise ValueError("'inputs' should be a list of column names in 'csv'" +
-                                 " or a value of None, but the following names are not in 'csv': '" +
-                                 str(invalid_names) + "'")
+                raise ValueError(
+                    "'inputs' should be a list of column names in 'csv'"
+                    + " or a value of None, but the following names are not in 'csv': '"
+                    + str(invalid_names)
+                    + "'"
+                )
 
         # validate datetime
         if not T in df.columns:
-            raise ValueError("'datetime' should be a column name in 'csv', got a value of '" +
-                             T + "' instead")
+            raise ValueError(
+                "'datetime' should be a column name in 'csv', got a value of '"
+                + T
+                + "' instead"
+            )
 
         samples = values.get("train_samples")
         h_win, f_win = values.get("history_window"), values.get("forecast_window")
         f_freq, t_freq = values.get("forecast_frequency"), values.get("train_frequency")
 
         # validate forecasting parameters
-        min_samples = 15
-        if not min_samples <= samples < df.shape[0]:
-            raise ValueError("'train_samples' should be at least " + str(min_samples) +
-                             " and less than the number of rows in 'csv' (" +
-                             str(df.shape[0]) + "), got a value of " + str(samples) + " instead")
         if not 1 <= h_win < samples:
-            raise ValueError("'history_window' should be at least 1 and less than 'train_samples' (" +
-                             str(samples) + "), got a value of " + str(h_win) + " instead")
+            raise ValueError(
+                "'history_window' should be at least 1 and less than 'train_samples' ("
+                + str(samples)
+                + "), got a value of "
+                + str(h_win)
+                + " instead"
+            )
         if not 1 <= f_win < samples:
-            raise ValueError("'forecast_window' should be at least 1 and less than 'train_samples' (" +
-                             str(samples) + "), got a value of " + str(f_win) + " instead")
-        if not 1 <= h_win + f_win < samples:
-            raise ValueError("'history_window' + 'forecast_window' should be less than 'train_samples' (" +
-                             str(samples) + "), got a value of " + str(h_win + f_win) + " instead")
-        if not 1 <= f_freq < samples:
-            raise ValueError("'forecast_frequency' should be at least 1 and less than 'train_samples' (" +
-                             str(samples) + "), got a value of " + str(f_freq) + " instead")
+            raise ValueError(
+                "'forecast_window' should be at least 1 and less than 'train_samples' ("
+                + str(samples)
+                + "), got a value of "
+                + str(f_win)
+                + " instead"
+            )
+        if not h_win + f_win < samples:
+            raise ValueError(
+                "'history_window' + 'forecast_window' should be less than 'train_samples' ("
+                + str(samples)
+                + "), got a value of "
+                + str(h_win + f_win)
+                + " instead"
+            )
         if not t_freq >= 1:
-            raise ValueError("'train_frequency' should be at least 1, got a value of " + str(t_freq) + " instead")
+            raise ValueError(
+                "'train_frequency' should be at least 1, got a value of "
+                + str(t_freq)
+                + " instead"
+            )
+        if not f_freq >= 1:
+            raise ValueError(
+                "'forecast_frequency' should be at least 1, got a value of "
+                + str(f_freq)
+                + " instead"
+            )
+        if not samples + f_win + f_freq < df.shape[0]:
+            raise ValueError(
+                "'train_samples' + 'forecast_window' + 'forecast_frequency' should be less than the number of rows in 'csv' ("
+                + str(df.shape[0])
+                + "), got a value of "
+                + str(samples + f_win + f_freq)
+                + " instead"
+            )
 
         return values
 
@@ -185,8 +223,9 @@ class Forecasting(BaseModel):
         """
         return df.iloc[start:end, :].copy()
 
-    def series_to_supervised(self, df: pd.DataFrame, n_backward: int,
-                             n_forward: int, dropnan: bool=False) -> pd.DataFrame:
+    def series_to_supervised(
+        self, df: pd.DataFrame, n_backward: int, n_forward: int, dropnan: bool = False
+    ) -> pd.DataFrame:
         """
         Reshape a data frame such that there are time lagged features
         Reference: https://machinelearningmastery.com/convert-time-series-supervised-learning-problem-python/
@@ -216,14 +255,14 @@ class Forecasting(BaseModel):
         # input sequence (t-n, ... t-1)
         for i in range(n_backward, 0, -1):
             cols.append(df.shift(i))
-            names += [(str(df.columns[j]) + '(t-%d)' % (i)) for j in range(n_vars)]
+            names += [(str(df.columns[j]) + "(t-%d)" % (i)) for j in range(n_vars)]
         # forecast sequence (t, t+1, ... t+n)
         for i in range(0, n_forward):
             cols.append(df.shift(-i))
             if i == 0:
-                names += [str(df.columns[j]) + '(t)' for j in range(n_vars)]
+                names += [str(df.columns[j]) + "(t)" for j in range(n_vars)]
             else:
-                names += [(str(df.columns[j]) + '(t+%d)' % (i)) for j in range(n_vars)]
+                names += [(str(df.columns[j]) + "(t+%d)" % (i)) for j in range(n_vars)]
         # put it all together
         agg = pd.concat(cols, axis=1)
         agg.columns = names
@@ -250,12 +289,10 @@ class Forecasting(BaseModel):
         y : pandas DataFrame
             the forward lagged features (outputs)
         """
-        if df.shape[1] != 1:
-            raise ValueError("'df' must be 1 column representing the model output, got " +
-                             str(df.shape[1]) + " instead")
-        df = self.series_to_supervised(df[[self.output]].copy(), self.history_window,
-                                       self.forecast_window + 1)
-        y = df.iloc[:, (self.forecast_window + 1):]
+        df = self.series_to_supervised(
+            df[[self.output]].copy(), self.history_window, self.forecast_window + 1
+        )
+        y = df.iloc[:, (self.forecast_window + 1) :]
         x = df.drop(columns=y.columns)
         return x, y
 
@@ -266,28 +303,24 @@ class Forecasting(BaseModel):
         Parameters
         ----------
         df : pandas DataFrame
-            the output variable to predict -> (S rows, 1 column) where S is the train_samples
+            the training (streamed) data to model
 
         Returns
         -------
         predictions : pandas DataFrame
             the forecast -> (1 row, W columns) where W is the forecast_window
         """
-        if df.shape[1] != 1:
-            raise ValueError("'df' must contain exactly 1 column representing the model output, got " +
-                             str(df.shape[1]) + " instead")
-        model = Holt(df)
+        model = Holt(df[[self.output]])
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore') # ignore common warning
-            object.__setattr__(self, "_model", model.fit()) # train the model
+            warnings.simplefilter("ignore")  # ignore common warning
+            object.__setattr__(self, "_model", model.fit())  # train the model
         predictions = self._model.forecast(self.forecast_window)
         predictions = pd.DataFrame(predictions).reset_index(drop=True).T
         return predictions
 
-    def roll(self, verbose: int=1) -> tuple:
+    def roll(self, verbose: int = 1) -> tuple:
         """
-        Reshape a data frame such that there are time lagged features
-        Split up the data frame into inputs and outputs for modeling
+        Make rolling forecasts with a model
 
         Parameters
         ----------
@@ -296,11 +329,30 @@ class Forecasting(BaseModel):
 
         Returns
         -------
-        x : pandas DataFrame
-            the backward lagged features (inputs)
+        _predictions : pandas DataFrame
+            the rolling predictions
 
-        y : pandas DataFrame
-            the forward lagged features (outputs)
+        _actual : pandas DataFrame
+            the known values to be predicted
         """
-        self.predict_ahead(self._data[[self.output]])
-        return None
+        for step in range(
+            self.train_samples,
+            self._data.shape[0] - self.forecast_window,
+            self.forecast_frequency,
+        ):
+            # train a model and make a forecast
+            df_train = self.stream_data(self._data, step - self.train_samples, step)
+            predicted = self.predict_ahead(df_train)
+            actual = (
+                self.stream_data(
+                    self._data[[self.output]], step + 1, step + 1 + self.forecast_window
+                )
+                .reset_index(drop=True)
+                .T
+            )
+
+            # define column and row names for this forecast
+
+            # save the forecast
+
+        return self._predictions, self._actual
