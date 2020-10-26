@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Stream data through a machine learning model to produce a rolling forecast
 
@@ -65,6 +66,9 @@ class Forecasting(BaseModel):
 
     _actual : pandas DataFrame
         the known values to be predicted
+
+    _error : pandas DataFrame
+        the rolling weighted absolute percent error
     """
 
     # input arguments (**kwarg)
@@ -80,7 +84,7 @@ class Forecasting(BaseModel):
     tune_model: bool = False
 
     # internal attributes (not inputs)
-    __slots__ = ["_model", "_data", "_predictions", "_actual"]
+    __slots__ = ["_model", "_data", "_predictions", "_actual", "_error"]
 
     def __init__(self, **kwarg) -> None:
         """
@@ -92,9 +96,10 @@ class Forecasting(BaseModel):
         object.__setattr__(self, "_data", pd.read_csv(self.csv))  # load the data
         object.__setattr__(self, "_predictions", pd.DataFrame())  # initial value
         object.__setattr__(self, "_actual", pd.DataFrame())  # initial value
+        object.__setattr__(self, "_error", pd.DataFrame())  # initial value
 
     @root_validator
-    def value_checks(cls, values):
+    def value_checks(cls, values) -> dict:
         """
         Check that the given csv file exists
         Check that the given column names are in the csv file
@@ -104,14 +109,10 @@ class Forecasting(BaseModel):
         csv = values.get("csv")
         if not csv.endswith(".csv"):
             raise ValueError(
-                "'csv' should be a file name with a .csv extension, got a value of '"
-                + csv
-                + "' instead"
+                f"'csv' should be a file name with a .csv extension, got a value of '{csv}' instead"
             )
         if not os.path.isfile(csv):
-            raise FileNotFoundError(
-                "There is no csv file at '" + os.getcwd() + "/" + csv + "'"
-            )
+            raise FileNotFoundError(f"There is no csv file at '{os.getcwd()}/{csv}'")
         df = pd.read_csv(csv)
 
         Y, X, T = values.get("output"), values.get("inputs"), values.get("datetime")
@@ -119,34 +120,26 @@ class Forecasting(BaseModel):
         # validate output
         if not Y in df.columns:
             raise ValueError(
-                "'output' should be a column name in 'csv', got a value of '"
-                + Y
-                + "' instead"
+                f"'output' should be a column name in 'csv', got a value of '{Y}' instead"
             )
 
         # validate inputs
         if not X is None:
             if len(X) == 0:
                 raise ValueError(
-                    "'inputs' should be a list of column names in 'csv'"
-                    + " or a value of None, got an empty list instead"
+                    "'inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
                 )
             not_found = [not x in df.columns for x in X]
             if any(not_found):
                 invalid_names = np.array(X)[np.where(not_found)[0]].tolist()
                 raise ValueError(
-                    "'inputs' should be a list of column names in 'csv'"
-                    + " or a value of None, but the following names are not in 'csv': '"
-                    + str(invalid_names)
-                    + "'"
+                    f"'inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
                 )
 
         # validate datetime
         if not T in df.columns:
             raise ValueError(
-                "'datetime' should be a column name in 'csv', got a value of '"
-                + T
-                + "' instead"
+                f"'datetime' should be a column name in 'csv', got a value of '{T}' instead"
             )
 
         samples = values.get("train_samples")
@@ -156,47 +149,27 @@ class Forecasting(BaseModel):
         # validate forecasting parameters
         if not 1 <= h_win < samples:
             raise ValueError(
-                "'history_window' should be at least 1 and less than 'train_samples' ("
-                + str(samples)
-                + "), got a value of "
-                + str(h_win)
-                + " instead"
+                f"'history_window' should be at least 1 and less than 'train_samples' ({samples}), got a value of {h_win} instead"
             )
         if not 1 <= f_win < samples:
             raise ValueError(
-                "'forecast_window' should be at least 1 and less than 'train_samples' ("
-                + str(samples)
-                + "), got a value of "
-                + str(f_win)
-                + " instead"
+                f"'forecast_window' should be at least 1 and less than 'train_samples' ({samples}), got a value of {f_win} instead"
             )
         if not h_win + f_win < samples:
             raise ValueError(
-                "'history_window' + 'forecast_window' should be less than 'train_samples' ("
-                + str(samples)
-                + "), got a value of "
-                + str(h_win + f_win)
-                + " instead"
+                f"'history_window' + 'forecast_window' should be less than 'train_samples' ({samples}), got a value of {h_win + f_win} instead"
             )
         if not t_freq >= 1:
             raise ValueError(
-                "'train_frequency' should be at least 1, got a value of "
-                + str(t_freq)
-                + " instead"
+                f"'train_frequency' should be at least 1, got a value of {t_freq} instead"
             )
         if not f_freq >= 1:
             raise ValueError(
-                "'forecast_frequency' should be at least 1, got a value of "
-                + str(f_freq)
-                + " instead"
+                f"'forecast_frequency' should be at least 1, got a value of {f_freq} instead"
             )
         if not samples + f_win + f_freq < df.shape[0]:
             raise ValueError(
-                "'train_samples' + 'forecast_window' + 'forecast_frequency' should be less than the number of rows in 'csv' ("
-                + str(df.shape[0])
-                + "), got a value of "
-                + str(samples + f_win + f_freq)
-                + " instead"
+                f"'train_samples' + 'forecast_window' + 'forecast_frequency' should be less than the number of rows in 'csv' ({df.shape[0]}), got a value of {samples + f_win + f_freq} instead"
             )
 
         return values
@@ -318,7 +291,7 @@ class Forecasting(BaseModel):
         predictions = pd.DataFrame(predictions).reset_index(drop=True).T
         return predictions
 
-    def roll(self, verbose: int = 1) -> tuple:
+    def roll(self, verbose: int = 1) -> None:
         """
         Make rolling forecasts with a model
 
@@ -326,14 +299,6 @@ class Forecasting(BaseModel):
         ----------
         verbose : int
             should the forecasting error be printed out? (0 - no, 1 - yes)
-
-        Returns
-        -------
-        _predictions : pandas DataFrame
-            the rolling predictions
-
-        _actual : pandas DataFrame
-            the known values to be predicted
         """
         for step in range(
             self.train_samples,
@@ -353,14 +318,20 @@ class Forecasting(BaseModel):
 
             # define column and row names for this forecast
             column_names = [
-                self.output + " (t+" + str(i + 1) + ")"
-                for i in range(self.forecast_window)
+                f"{self.output} (t+{i + 1})" for i in range(self.forecast_window)
             ]
             row_name = (
                 step if self.datetime is None else self._data[self.datetime][step]
             )
             predicted.columns, actual.columns = column_names, column_names
             predicted.index, actual.index = [row_name], [row_name]
+
+            # compute the forecast error (weighted absolute percent error)
+            error = pd.DataFrame(
+                (actual - predicted).abs().sum(axis="columns")
+                / actual.abs().sum(axis="columns")
+            )
+            error.columns = ["percent_error"]
 
             # save the forecast
             object.__setattr__(
@@ -371,9 +342,12 @@ class Forecasting(BaseModel):
             object.__setattr__(
                 self, "_actual", pd.concat([self._actual, actual], axis="index")
             )
+            object.__setattr__(
+                self, "_error", pd.concat([self._error, error], axis="index")
+            )
 
             # report the percent error if desired
             if verbose != 0:
-                mape = ((predicted / actual) - 1).abs().mean(axis="columns")
-
-        return self._predictions, self._actual
+                print(
+                    f"time={error.index[0]}, error={np.round(error.values[0] * 100, 2)[0]}%"
+                )

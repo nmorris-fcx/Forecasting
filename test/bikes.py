@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Build forecasting models to predict bike share demand
 
@@ -21,5 +22,5 @@ with open("test/config.json") as f:
 
 # produce a rolling forecast
 model = Forecasting(**config)
-pred, true = model.roll()
+model.roll()
 pred
