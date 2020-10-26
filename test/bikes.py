@@ -21,4 +21,5 @@ with open("test/config.json") as f:
 
 # produce a rolling forecast
 model = Forecasting(**config)
-model.roll()
+pred, true = model.roll()
+pred

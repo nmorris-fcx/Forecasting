@@ -310,7 +310,7 @@ class Forecasting(BaseModel):
         predictions : pandas DataFrame
             the forecast -> (1 row, W columns) where W is the forecast_window
         """
-        model = Holt(df[[self.output]])
+        model = Holt(df[[self.output]], initialization_method="estimated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # ignore common warning
             object.__setattr__(self, "_model", model.fit())  # train the model
@@ -352,7 +352,28 @@ class Forecasting(BaseModel):
             )
 
             # define column and row names for this forecast
+            column_names = [
+                self.output + " (t+" + str(i + 1) + ")"
+                for i in range(self.forecast_window)
+            ]
+            row_name = (
+                step if self.datetime is None else self._data[self.datetime][step]
+            )
+            predicted.columns, actual.columns = column_names, column_names
+            predicted.index, actual.index = [row_name], [row_name]
 
             # save the forecast
+            object.__setattr__(
+                self,
+                "_predictions",
+                pd.concat([self._predictions, predicted], axis="index"),
+            )
+            object.__setattr__(
+                self, "_actual", pd.concat([self._actual, actual], axis="index")
+            )
+
+            # report the percent error if desired
+            if verbose != 0:
+                mape = ((predicted / actual) - 1).abs().mean(axis="columns")
 
         return self._predictions, self._actual
