@@ -125,6 +125,10 @@ class Forecasting(BaseModel):
             raise ValueError(
                 f"'output' should be a column name in 'csv', got a value of '{Y}' instead"
             )
+        if df[Y].dtype == "object":
+            raise ValueError(
+                "'output' should be the name of a numerical column in 'csv', got a non-numerical column instead"
+            )
 
         # validate inputs
         if not X is None:
@@ -137,6 +141,11 @@ class Forecasting(BaseModel):
                 invalid_names = np.array(X)[np.where(not_found)[0]].tolist()
                 raise ValueError(
                     f"'inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
+                )
+            x_str = np.where(df[X].dtypes == "object")[0]
+            if len(x_str) > 0:
+                raise ValueError(
+                    f"'inputs' should be a list of names of numerical columns in 'csv' or a value of None, but the following columns are non-numerical in 'csv': {X[x_str]}"
                 )
 
         # validate datetime
@@ -268,7 +277,7 @@ class Forecasting(BaseModel):
         df = self.series_to_supervised(
             df[[self.output]].copy(), self.history_window, self.forecast_window + 1
         )
-        x = df.iloc[:, :(self.history_window + 1)]
+        x = df.iloc[:, : (self.history_window + 1)]
         y = df.drop(columns=x.columns)
         return x, y
 
@@ -301,14 +310,14 @@ class Forecasting(BaseModel):
         predictions = pd.DataFrame(predictions).reset_index(drop=True).T
         return predictions
 
-    def roll(self, verbose: int = 1) -> None:
+    def roll(self, verbose: bool = True) -> None:
         """
         Make rolling forecasts with a model
 
         Parameters
         ----------
-        verbose : int
-            should the forecasting error be printed out? (0 - no, 1 - yes)
+        verbose : bool
+            should the forecasting error be printed out?
         """
         for step in range(
             self.train_samples,
@@ -357,7 +366,7 @@ class Forecasting(BaseModel):
             )
 
             # report the percent error
-            if verbose != 0:
+            if verbose:
                 print(
                     f"time={error.index[0]}, error={np.round(error.values[0] * 100, 2)[0]}%"
                 )

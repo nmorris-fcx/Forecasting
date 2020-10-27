@@ -5,15 +5,16 @@ Stream data through a lasso regression model to produce a rolling forecast
 @author: Nick
 """
 
-import warnings
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
 from sklearn.linear_model import Lasso, LassoCV
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.utils._testing import ignore_warnings
+from sklearn.exceptions import ConvergenceWarning
 from forecast import Forecasting
 
 
@@ -114,21 +115,21 @@ class Regression(Forecasting):
                 # set up cross validation for time series
                 tscv = TimeSeriesSplit(n_splits=3)
                 folds = tscv.get_n_splits(X)
-                model = LassoCV(cv=folds, eps=1e-9, n_alphas=16, n_jobs=-1)
+                model = LassoCV(cv=folds, eps=1e-9, n_alphas=16, n_jobs=1)
             else:
-                model = Lasso(alpha=0.1)
+                model = Lasso(alpha=0.25, warm_start=True)
 
             # set up a machine learning pipeline
             pipeline = Pipeline(
                 [
                     ("var", VarianceThreshold()),
+                    # ("poly", PolynomialFeatures(2)),  # makes run time longer
                     ("scale", MinMaxScaler()),
-                    ("model", MultiOutputRegressor(model)),
+                    ("model", MultiOutputRegressor(model, n_jobs=1)),
                 ]
             )
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")  # ignore common warning
+            with ignore_warnings(category=ConvergenceWarning):  # ignore common warning
                 object.__setattr__(
                     self, "_model", pipeline.fit(X, Y)  # train the model
                 )
