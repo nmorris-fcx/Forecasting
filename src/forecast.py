@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Stream data through a machine learning model to produce a rolling forecast
+Stream data through an exponential smoothing model to produce a rolling forecast
 
 @author: Nick
 """
-
 
 import os
 import warnings
@@ -12,13 +11,13 @@ from typing import Union
 from pydantic import BaseModel, root_validator
 import numpy as np
 import pandas as pd
-from statsmodels.tsa.holtwinters import Holt
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 
 class Forecasting(BaseModel):
     """
-    A base class that is mean't to be inherited by a Machine Learning class to
-    produce a model's rolling forecast
+    A base class that can be inherited by a machine learning class to
+    produce a model's rolling forecast -> redefine 'predict_ahead' method
     By default this class builds an Exponential Smoothing model
 
     Parameters
@@ -55,7 +54,7 @@ class Forecasting(BaseModel):
 
     Attributes
     ----------
-    _model : sklearn Pipeline, statsmodels Holt, keras Model, default=None
+    _model : statsmodels ExponentialSmoothing, default=None
         the model to make predictions with
 
     _data : pandas DataFrame
@@ -69,6 +68,9 @@ class Forecasting(BaseModel):
 
     _error : pandas DataFrame
         the rolling weighted absolute percent error
+
+    _counter : int
+        the counter for scheduling model training
     """
 
     # input arguments (**kwarg)
@@ -84,7 +86,7 @@ class Forecasting(BaseModel):
     tune_model: bool = False
 
     # internal attributes (not inputs)
-    __slots__ = ["_model", "_data", "_predictions", "_actual", "_error"]
+    __slots__ = ["_model", "_data", "_predictions", "_actual", "_error", "_counter"]
 
     def __init__(self, **kwarg) -> None:
         """
@@ -97,6 +99,7 @@ class Forecasting(BaseModel):
         object.__setattr__(self, "_predictions", pd.DataFrame())  # initial value
         object.__setattr__(self, "_actual", pd.DataFrame())  # initial value
         object.__setattr__(self, "_error", pd.DataFrame())  # initial value
+        object.__setattr__(self, "_counter", 0)  # initial value
 
     @root_validator
     def value_checks(cls, values) -> dict:
@@ -265,8 +268,8 @@ class Forecasting(BaseModel):
         df = self.series_to_supervised(
             df[[self.output]].copy(), self.history_window, self.forecast_window + 1
         )
-        y = df.iloc[:, (self.forecast_window + 1) :]
-        x = df.drop(columns=y.columns)
+        x = df.iloc[:, :(self.history_window + 1)]
+        y = df.drop(columns=x.columns)
         return x, y
 
     def predict_ahead(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -283,7 +286,14 @@ class Forecasting(BaseModel):
         predictions : pandas DataFrame
             the forecast -> (1 row, W columns) where W is the forecast_window
         """
-        model = Holt(df[[self.output]], initialization_method="estimated")
+        model = ExponentialSmoothing(
+            df[[self.output]],
+            trend="add",  # add, mul, None
+            damped_trend=False,
+            # seasonal="add",        # add, mul
+            # seasonal_periods=None  # positve integer
+            initialization_method="estimated",
+        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # ignore common warning
             object.__setattr__(self, "_model", model.fit())  # train the model
@@ -346,7 +356,7 @@ class Forecasting(BaseModel):
                 self, "_error", pd.concat([self._error, error], axis="index")
             )
 
-            # report the percent error if desired
+            # report the percent error
             if verbose != 0:
                 print(
                     f"time={error.index[0]}, error={np.round(error.values[0] * 100, 2)[0]}%"
