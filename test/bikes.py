@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from sklearn.metrics import r2_score
 from forecast import Forecasting
 from lasso import Regression
 
@@ -48,8 +49,20 @@ week.columns = [f"Week_{c}" for c in week.columns]
 month = pd.get_dummies(timestamps.dt.month.astype(str))
 month.columns = [f"Month_{c}" for c in month.columns]
 
+# compute rolling statistics on the output
+Avg = data[["count"]].rolling(6).mean()
+Avg.columns = ["avg_count"]
+Std = data[["count"]].rolling(6).std()
+Std.columns = ["std_count"]
+Min = data[["count"]].rolling(6).min()
+Min.columns = ["min_count"]
+Max = data[["count"]].rolling(6).max()
+Max.columns = ["max_count"]
+
 # add the features to the data
-data = pd.concat([data, hours, weekday, week, month], axis="columns")
+data = pd.concat(
+    [data, hours, weekday, week, month, Avg, Std, Min, Max], axis="columns"
+)
 
 # save the data
 data.iloc[:1440].to_csv("test/bikes_v2.csv", index=False)
@@ -81,6 +94,9 @@ df = pd.concat(
 )
 df.columns = ["Actual", "Predict"]
 df["index"] = pd.to_datetime(df.index)
+
+# report R2
+print(f'step ahead={step_ahead}, R2={np.round(r2_score(df["Actual"], df["Predict"]) * 100, 2)}%')
 
 # plot the prediction series
 fig = px.scatter(df, x="index", y="Predict")

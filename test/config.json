@@ -8,5 +8,5 @@
     "forecast_window": 24,
     "forecast_frequency": 1,
     "train_frequency": 1,
-    "tune_model": true
+    "tune_model": false
 }

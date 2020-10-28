@@ -325,7 +325,8 @@ class Forecasting(BaseModel):
             self.forecast_frequency,
         ):
             # train a model and make a forecast
-            df_train = self.stream_data(self._data, step - self.train_samples, step)
+            # df_train = self.stream_data(self._data, step - self.train_samples, step)
+            df_train = self.stream_data(self._data, 0, step)
             predicted = self.predict_ahead(df_train)
             actual = (
                 self.stream_data(
