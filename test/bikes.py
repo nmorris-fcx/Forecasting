@@ -96,7 +96,9 @@ df.columns = ["Actual", "Predict"]
 df["index"] = pd.to_datetime(df.index)
 
 # report R2
-print(f'step ahead={step_ahead}, R2={np.round(r2_score(df["Actual"], df["Predict"]) * 100, 2)}%')
+print(
+    f'step ahead={step_ahead}, R2={np.round(r2_score(df["Actual"], df["Predict"]) * 100, 2)}%'
+)
 
 # plot the prediction series
 fig = px.scatter(df, x="index", y="Predict")
