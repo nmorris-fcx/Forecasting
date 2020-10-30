@@ -71,6 +71,8 @@ data.iloc[:1440].to_csv("test/bikes_v2.csv", index=False)
 with open("test/config.json") as f:
     config = json.load(f)
 
+# UPDATE with history_inputs and forecast_inputs
+
 # update the configuration for the new version of the data
 config["csv"] = "test/bikes_v2.csv"
 config["inputs"] = data.drop(

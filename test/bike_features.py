@@ -59,27 +59,33 @@ def series_to_supervised(data, n_backward=1, n_forward=1, dropnan=False):
 data = pd.read_csv("test/bikes.csv")
 
 # convert season into a string
-conditions = [(data["season"] == 1),
-              (data["season"] == 2),
-              (data["season"] == 3),
-              (data["season"] == 4)]
+conditions = [
+    (data["season"] == 1),
+    (data["season"] == 2),
+    (data["season"] == 3),
+    (data["season"] == 4),
+]
 choices = ["spring", "summer", "fall", "winter"]
 data["season"] = np.select(conditions, choices, default=None)
 
 # convert weather into a string
-conditions = [(data["weather"] == 1),
-              (data["weather"] == 2),
-              (data["weather"] == 3),
-              (data["weather"] == 4)]
-choices = ["Clear, Few clouds, Partly cloudy, Partly cloudy", 
-           "Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist", 
-           "Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds", 
-           "Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog"]
+conditions = [
+    (data["weather"] == 1),
+    (data["weather"] == 2),
+    (data["weather"] == 3),
+    (data["weather"] == 4),
+]
+choices = [
+    "Clear, Few clouds, Partly cloudy, Partly cloudy",
+    "Mist + Cloudy, Mist + Broken clouds, Mist + Few clouds, Mist",
+    "Light Snow, Light Rain + Thunderstorm + Scattered clouds, Light Rain + Scattered clouds",
+    "Heavy Rain + Ice Pallets + Thunderstorm + Mist, Snow + Fog",
+]
 data["weather"] = np.select(conditions, choices, default=None)
 
 # convert holiday and workingday into booleans
-data["holiday"] = (data["holiday"] == 1)
-data["workingday"] = (data["workingday"] == 1)
+data["holiday"] = data["holiday"] == 1
+data["workingday"] = data["workingday"] == 1
 
 # compute the fraction of users that are registered users
 data["registered_fraction"] = data["registered"] / (data["casual"] + data["registered"])
@@ -103,7 +109,9 @@ data[f"count: {window} hour minimum"] = data[["count"]].rolling(window).min()
 data[f"count: {window} hour maximum"] = data[["count"]].rolling(window).max()
 
 # compute lag terms on the output
-lags = series_to_supervised(data[["count"]], n_backward=24 * 7, n_forward=0) # lagging up to a week
+lags = series_to_supervised(
+    data[["count"]], n_backward=24 * 7, n_forward=0
+)  # lagging up to a week
 
 # compute autocorrealtions
 autocorr = lags.corrwith(data["count"]).reset_index()

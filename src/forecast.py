@@ -7,7 +7,7 @@ Stream data through an exponential smoothing model to produce a rolling forecast
 
 import os
 import warnings
-from typing import Union
+from typing import Union, List
 from pydantic import BaseModel, root_validator
 import numpy as np
 import pandas as pd
@@ -23,13 +23,26 @@ class Forecasting(BaseModel):
     Parameters
     ----------
     csv : str
-        CSV file of a data frame -> "example.csv"
+        name (or path) of a CSV file of a data frame
 
     output : str
-        name of column to predict in a model -> "Y"
+        name of column to predict in a model
 
-    inputs : list, default=None
-        names of columns to use as features in a model -> ["X1", "X2"]
+    history_inputs : list of str, default=None
+        names of columns to use as features in a model
+        these features are not observable in the forecast period
+            for example:
+                if we are forecasting temperature then windspeed may be a useful feature for our model
+                but when we predict tomorrow's temperature, we don't know tomorrow's windspeed
+                therefore windpeed is a historical feature in our model
+
+    forecast_inputs : list of str, default=None
+        names of columns to use as features in a model
+        these features are observable in the forecast period
+            for example:
+                if we are forecasting temperature then the week of the year may be a useful feature for our model
+                and when we predict the temperature for a day of next week, we know what week of the year that is
+                therefore the week of the year is a foreseeable feature in our model
 
     datetime : str, default=None
         name of column to use as an index for the predictions
@@ -76,7 +89,8 @@ class Forecasting(BaseModel):
     # input arguments (**kwarg)
     csv: str
     output: str
-    inputs: Union[list, None] = None
+    history_inputs: Union[List[str], None] = None
+    forecast_inputs: Union[List[str], None] = None
     datetime: Union[str, None] = None
     train_samples: int = 100
     history_window: int = 10
@@ -85,7 +99,7 @@ class Forecasting(BaseModel):
     train_frequency: int = 5
     tune_model: bool = False
 
-    # internal attributes (not inputs)
+    # internal attributes (not arguments)
     __slots__ = ["_model", "_data", "_predictions", "_actual", "_error", "_counter"]
 
     def __init__(self, **kwarg) -> None:
@@ -117,8 +131,14 @@ class Forecasting(BaseModel):
         if not os.path.isfile(csv):
             raise FileNotFoundError(f"There is no csv file at '{os.getcwd()}/{csv}'")
         df = pd.read_csv(csv)
+        df.columns = df.columns.astype(str)  # enforce column names to be strings
 
-        Y, X, T = values.get("output"), values.get("inputs"), values.get("datetime")
+        Y, H, F, T = (
+            values.get("output"),
+            values.get("history_inputs"),
+            values.get("forecast_inputs"),
+            values.get("datetime"),
+        )
 
         # validate output
         if not Y in df.columns:
@@ -130,22 +150,40 @@ class Forecasting(BaseModel):
                 "'output' should be the name of a numerical column in 'csv', got a non-numerical column instead"
             )
 
-        # validate inputs
-        if not X is None:
-            if len(X) == 0:
+        # validate history_inputs
+        if not H is None:
+            if len(H) == 0:
                 raise ValueError(
-                    "'inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
+                    "'history_inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
                 )
-            not_found = [not x in df.columns for x in X]
+            not_found = [not h in df.columns for h in H]
             if any(not_found):
-                invalid_names = np.array(X)[np.where(not_found)[0]].tolist()
+                invalid_names = np.array(H)[np.where(not_found)[0]].tolist()
                 raise ValueError(
-                    f"'inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
+                    f"'history_inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
                 )
-            x_str = np.where(df[X].dtypes == "object")[0]
-            if len(x_str) > 0:
+            str_loc = np.where(df[H].dtypes == "object")[0]
+            if len(str_loc) > 0:
                 raise ValueError(
-                    f"'inputs' should be a list of names of numerical columns in 'csv' or a value of None, but the following columns are non-numerical in 'csv': {X[x_str]}"
+                    f"'history_inputs' should be a list of names of numerical columns in 'csv' or a value of None, but the following columns are non-numerical in 'csv': {H[str_loc]}"
+                )
+
+        # validate forecast_inputs
+        if not F is None:
+            if len(F) == 0:
+                raise ValueError(
+                    "'forecast_inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
+                )
+            not_found = [not f in df.columns for f in F]
+            if any(not_found):
+                invalid_names = np.array(F)[np.where(not_found)[0]].tolist()
+                raise ValueError(
+                    f"'forecast_inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
+                )
+            str_loc = np.where(df[F].dtypes == "object")[0]
+            if len(str_loc) > 0:
+                raise ValueError(
+                    f"'forecast_inputs' should be a list of names of numerical columns in 'csv' or a value of None, but the following columns are non-numerical in 'csv': {F[str_loc]}"
                 )
 
         # validate datetime
@@ -268,7 +306,7 @@ class Forecasting(BaseModel):
 
         Returns
         -------
-        x : pandas DataFrame
+        F : pandas DataFrame
             the backward lagged features (inputs)
 
         y : pandas DataFrame
@@ -277,9 +315,9 @@ class Forecasting(BaseModel):
         df = self.series_to_supervised(
             df[[self.output]].copy(), self.history_window, self.forecast_window + 1
         )
-        x = df.iloc[:, : (self.history_window + 1)]
-        y = df.drop(columns=x.columns)
-        return x, y
+        F = df.iloc[:, : (self.history_window + 1)]
+        y = df.drop(columns=F.columns)
+        return F, y
 
     def predict_ahead(self, df: pd.DataFrame) -> pd.DataFrame:
         """

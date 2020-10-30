@@ -3,6 +3,8 @@
 Stream data through a lasso regression model to produce a rolling forecast
 
 @author: Nick
+
+UPDATE with history_inputs and forecast_inputs
 """
 
 import numpy as np
