@@ -77,7 +77,7 @@ config["csv"] = "test/bikes_v2.csv"
 config["inputs"] = data.drop(
     columns=["datetime", "count", "casual", "registered"]
 ).columns.tolist()
-config["resolution"] = None
+# config["resolution"] = None
 
 # In[2]: Model the data
 
