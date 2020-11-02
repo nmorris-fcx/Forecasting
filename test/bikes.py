@@ -7,16 +7,16 @@ Build forecasting models to predict bike share demand
 
 import os
 import sys
-
-# add the src directory to the system path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/")))
-
 import json
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.metrics import r2_score
+
+# add the src directory to the system path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/")))
+
 from forecast import Forecasting
 from lasso import Regression
 
@@ -29,55 +29,55 @@ data["season"] = data["season"].astype(str)
 data["weather"] = data["weather"].astype(str)
 data = pd.get_dummies(data, columns=["season", "weather"])
 
-# convert datetime to a date time object
-data["datetime"] = pd.to_datetime(data["datetime"])
-timestamps = pd.Series(data["datetime"])
+# # convert datetime to a date time object
+# data["datetime"] = pd.to_datetime(data["datetime"])
+# timestamps = pd.Series(data["datetime"])
 
-# collect the hour as binary variables
-hours = pd.get_dummies(timestamps.dt.hour.astype(str))
-hours.columns = [f"Hour_{c}" for c in hours.columns]
+# # collect the hour as binary variables
+# hours = pd.get_dummies(timestamps.dt.hour.astype(str))
+# hours.columns = [f"Hour_{c}" for c in hours.columns]
 
-# collect the weekday as binary variables
-weekday = pd.get_dummies(timestamps.dt.weekday.astype(str))
-weekday.columns = [f"Weekday_{c}" for c in weekday.columns]
+# # collect the weekday as binary variables
+# weekday = pd.get_dummies(timestamps.dt.weekday.astype(str))
+# weekday.columns = [f"Weekday_{c}" for c in weekday.columns]
 
-# collect the week as binary variables
-week = pd.get_dummies(timestamps.dt.isocalendar().week.astype(str))
-week.columns = [f"Week_{c}" for c in week.columns]
+# # collect the week as binary variables
+# week = pd.get_dummies(timestamps.dt.isocalendar().week.astype(str))
+# week.columns = [f"Week_{c}" for c in week.columns]
 
-# collect the month as binary variables
-month = pd.get_dummies(timestamps.dt.month.astype(str))
-month.columns = [f"Month_{c}" for c in month.columns]
+# # collect the month as binary variables
+# month = pd.get_dummies(timestamps.dt.month.astype(str))
+# month.columns = [f"Month_{c}" for c in month.columns]
 
-# compute rolling statistics on the output
-Avg = data[["count"]].rolling(6).mean()
-Avg.columns = ["avg_count"]
-Std = data[["count"]].rolling(6).std()
-Std.columns = ["std_count"]
-Min = data[["count"]].rolling(6).min()
-Min.columns = ["min_count"]
-Max = data[["count"]].rolling(6).max()
-Max.columns = ["max_count"]
+# # compute rolling statistics on the output
+# Avg = data[["count"]].rolling(6).mean()
+# Avg.columns = ["avg_count"]
+# Std = data[["count"]].rolling(6).std()
+# Std.columns = ["std_count"]
+# Min = data[["count"]].rolling(6).min()
+# Min.columns = ["min_count"]
+# Max = data[["count"]].rolling(6).max()
+# Max.columns = ["max_count"]
 
-# add the features to the data
-data = pd.concat(
-    [data, hours, weekday, week, month, Avg, Std, Min, Max], axis="columns"
-)
+# # add the features to the data
+# data = pd.concat(
+#     [data, hours, weekday, week, month, Avg, Std, Min, Max],
+#     axis="columns",
+# )
 
 # save the data
-data.iloc[:1440].to_csv("test/bikes_v2.csv", index=False)
+data[:1440].to_csv("test/bikes_v2.csv", index=False)
 
 # import the configuration for modeling
-with open("test/config.json") as f:
+with open("test/bikes.json") as f:
     config = json.load(f)
-
-# UPDATE with history_inputs and forecast_inputs
 
 # update the configuration for the new version of the data
 config["csv"] = "test/bikes_v2.csv"
 config["inputs"] = data.drop(
     columns=["datetime", "count", "casual", "registered"]
 ).columns.tolist()
+config["resolution"] = None
 
 # In[2]: Model the data
 

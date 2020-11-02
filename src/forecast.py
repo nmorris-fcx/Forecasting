@@ -23,29 +23,20 @@ class Forecasting(BaseModel):
     Parameters
     ----------
     csv : str
-        name (or path) of a CSV file of a data frame
+        name of (or path to) CSV file of a data frame
 
     output : str
         name of column to predict in a model
 
-    history_inputs : list of str, default=None
+    inputs : list of str, default=None
         names of columns to use as features in a model
-        these features are not observable in the forecast period
-            for example:
-                if we are forecasting temperature then windspeed may be a useful feature for our model
-                but when we predict tomorrow's temperature, we don't know tomorrow's windspeed
-                therefore windpeed is a historical feature in our model
-
-    forecast_inputs : list of str, default=None
-        names of columns to use as features in a model
-        these features are observable in the forecast period
-            for example:
-                if we are forecasting temperature then the week of the year may be a useful feature for our model
-                and when we predict the temperature for a day of next week, we know what week of the year that is
-                therefore the week of the year is a foreseeable feature in our model
 
     datetime : str, default=None
         name of column to use as an index for the predictions
+
+    resolution : list of str, default=None
+        name of time intervals to use as features in a model
+            options: year, quarter, month, week, dayofyear, day, weekday, hour, minute, second
 
     train_samples : int, default=100
         the number of observations to train the model with
@@ -89,9 +80,9 @@ class Forecasting(BaseModel):
     # input arguments (**kwarg)
     csv: str
     output: str
-    history_inputs: Union[List[str], None] = None
-    forecast_inputs: Union[List[str], None] = None
+    inputs: Union[List[str], None] = None
     datetime: Union[str, None] = None
+    resolution: Union[List[str], None] = None
     train_samples: int = 100
     history_window: int = 10
     forecast_window: int = 10
@@ -99,7 +90,7 @@ class Forecasting(BaseModel):
     train_frequency: int = 5
     tune_model: bool = False
 
-    # internal attributes (not arguments)
+    # internal attributes (not inputs)
     __slots__ = ["_model", "_data", "_predictions", "_actual", "_error", "_counter"]
 
     def __init__(self, **kwarg) -> None:
@@ -109,7 +100,9 @@ class Forecasting(BaseModel):
         """
         super().__init__(**kwarg)  # validate the input arguments
         object.__setattr__(self, "_model", None)  # initial value
-        object.__setattr__(self, "_data", pd.read_csv(self.csv))  # load the data
+        object.__setattr__(
+            self, "_data", pd.read_csv(self.csv).reset_index(drop=True)
+        )  # load the data
         object.__setattr__(self, "_predictions", pd.DataFrame())  # initial value
         object.__setattr__(self, "_actual", pd.DataFrame())  # initial value
         object.__setattr__(self, "_error", pd.DataFrame())  # initial value
@@ -131,13 +124,12 @@ class Forecasting(BaseModel):
         if not os.path.isfile(csv):
             raise FileNotFoundError(f"There is no csv file at '{os.getcwd()}/{csv}'")
         df = pd.read_csv(csv)
-        df.columns = df.columns.astype(str)  # enforce column names to be strings
 
-        Y, H, F, T = (
+        Y, X, T, R = (
             values.get("output"),
-            values.get("history_inputs"),
-            values.get("forecast_inputs"),
+            values.get("inputs"),
             values.get("datetime"),
+            values.get("resolution"),
         )
 
         # validate output
@@ -145,45 +137,18 @@ class Forecasting(BaseModel):
             raise ValueError(
                 f"'output' should be a column name in 'csv', got a value of '{Y}' instead"
             )
-        if df[Y].dtype == "object":
-            raise ValueError(
-                "'output' should be the name of a numerical column in 'csv', got a non-numerical column instead"
-            )
 
-        # validate history_inputs
-        if not H is None:
-            if len(H) == 0:
+        # validate inputs
+        if not X is None:
+            if len(X) == 0:
                 raise ValueError(
-                    "'history_inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
+                    "'inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
                 )
-            not_found = [not h in df.columns for h in H]
+            not_found = [not x in df.columns for x in X]
             if any(not_found):
-                invalid_names = np.array(H)[np.where(not_found)[0]].tolist()
+                invalid_names = np.array(X)[np.where(not_found)[0]].tolist()
                 raise ValueError(
-                    f"'history_inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
-                )
-            str_loc = np.where(df[H].dtypes == "object")[0]
-            if len(str_loc) > 0:
-                raise ValueError(
-                    f"'history_inputs' should be a list of names of numerical columns in 'csv' or a value of None, but the following columns are non-numerical in 'csv': {H[str_loc]}"
-                )
-
-        # validate forecast_inputs
-        if not F is None:
-            if len(F) == 0:
-                raise ValueError(
-                    "'forecast_inputs' should be a list of column names in 'csv' or a value of None, got an empty list instead"
-                )
-            not_found = [not f in df.columns for f in F]
-            if any(not_found):
-                invalid_names = np.array(F)[np.where(not_found)[0]].tolist()
-                raise ValueError(
-                    f"'forecast_inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
-                )
-            str_loc = np.where(df[F].dtypes == "object")[0]
-            if len(str_loc) > 0:
-                raise ValueError(
-                    f"'forecast_inputs' should be a list of names of numerical columns in 'csv' or a value of None, but the following columns are non-numerical in 'csv': {F[str_loc]}"
+                    f"'inputs' should be a list of column names in 'csv' or a value of None, but the following names are not in 'csv': {invalid_names}"
                 )
 
         # validate datetime
@@ -191,6 +156,30 @@ class Forecasting(BaseModel):
             raise ValueError(
                 f"'datetime' should be a column name in 'csv', got a value of '{T}' instead"
             )
+
+        # validate resolution
+        if not R is None:
+            not_found = [
+                not r
+                in [
+                    "year",
+                    "quarter",
+                    "month",
+                    "week",
+                    "dayofyear",
+                    "day",
+                    "weekday",
+                    "hour",
+                    "minute",
+                    "second",
+                ]
+                for r in R
+            ]
+            if any(not_found):
+                invalid_names = np.array(R)[np.where(not_found)[0]].tolist()
+                raise ValueError(
+                    f"'resolution' should be a list of any of the following time intervals: ['year', 'quarter', 'month', 'week', 'dayofyear', 'day', 'weekday', 'hour', 'minute', 'second'] or a value of None, but the following are not time intervals: {invalid_names}"
+                )
 
         samples = values.get("train_samples")
         h_win, f_win = values.get("history_window"), values.get("forecast_window")
@@ -306,7 +295,7 @@ class Forecasting(BaseModel):
 
         Returns
         -------
-        F : pandas DataFrame
+        x : pandas DataFrame
             the backward lagged features (inputs)
 
         y : pandas DataFrame
@@ -315,9 +304,149 @@ class Forecasting(BaseModel):
         df = self.series_to_supervised(
             df[[self.output]].copy(), self.history_window, self.forecast_window + 1
         )
-        F = df.iloc[:, : (self.history_window + 1)]
-        y = df.drop(columns=F.columns)
-        return F, y
+        x = df.iloc[:, : (self.history_window + 1)]
+        y = df.drop(columns=x.columns)
+        return x, y
+
+    def time_features(self, df: pd.DataFrame, binary: bool = True) -> pd.DataFrame:
+        """
+        Extract features from a datetime column
+
+        Parameters
+        ----------
+        df : pandas DataFrame
+            the available data with a datetime column
+        
+        binary : bool
+            should the time features be converted into binary variables?
+
+        Returns
+        -------
+        T : pandas DataFrame
+            the time features
+        """
+        if self.resolution is None:
+            raise ValueError(
+                "'resolution' should be a list of any of the following time intervals: ['year', 'quarter', 'month', 'week', 'dayofyear', 'day', 'weekday', 'hour', 'minute', 'second'], got None instead"
+            )
+        if self.datetime is None:
+            raise ValueError(
+                "'datetime' should be a column name in 'df', got None instead"
+            )
+        timestamps = pd.to_datetime(df[self.datetime])
+
+        # extend the timestamps to include the forecast horizon
+        delta = timestamps[-1:].values[0] - timestamps[-2:-1].values[0]
+        forecast_timestamps = pd.date_range(
+            start=timestamps[-1:].values[0] + delta,
+            end=timestamps[-1:].values[0] + delta * self.forecast_window,
+            periods=self.forecast_window,
+        )
+        timestamps = pd.Series(np.concatenate((timestamps, forecast_timestamps)))
+        T = pd.DataFrame()
+
+        # extract features from the timestamps
+        if "year" in self.resolution:
+            year = (
+                pd.get_dummies(timestamps.dt.year.astype(str))
+                if binary
+                else timestamps.dt.year
+            )
+            year.columns = [f"year_{c}" for c in year.columns] if binary else ["year"]
+            T = pd.concat([T, year], axis="columns")
+        if "quarter" in self.resolution:
+            quarter = (
+                pd.get_dummies(timestamps.dt.quarter.astype(str))
+                if binary
+                else timestamps.dt.quarter
+            )
+            quarter.columns = (
+                [f"quarter_{c}" for c in quarter.columns] if binary else ["quarter"]
+            )
+            T = pd.concat([T, quarter], axis="columns")
+        if "month" in self.resolution:
+            month = (
+                pd.get_dummies(timestamps.dt.month.astype(str))
+                if binary
+                else timestamps.dt.month
+            )
+            month.columns = (
+                [f"month_{c}" for c in month.columns] if binary else ["month"]
+            )
+            T = pd.concat([T, month], axis="columns")
+        if "week" in self.resolution:
+            week = (
+                pd.get_dummies(timestamps.dt.isocalendar().week.astype(str))
+                if binary
+                else timestamps.dt.isocalendar().week
+            )
+            week.columns = [f"week_{c}" for c in week.columns] if binary else ["week"]
+            T = pd.concat([T, week], axis="columns")
+        if "dayofyear" in self.resolution:
+            dayofyear = (
+                pd.get_dummies(timestamps.dt.dayofyear.astype(str))
+                if binary
+                else timestamps.dt.dayofyear
+            )
+            dayofyear.columns = (
+                [f"dayofyear_{c}" for c in dayofyear.columns]
+                if binary
+                else ["dayofyear"]
+            )
+            T = pd.concat([T, dayofyear], axis="columns")
+        if "day" in self.resolution:
+            day = (
+                pd.get_dummies(timestamps.dt.day.astype(str))
+                if binary
+                else timestamps.dt.day
+            )
+            day.columns = [f"day_{c}" for c in day.columns] if binary else ["day"]
+            T = pd.concat([T, day], axis="columns")
+        if "weekday" in self.resolution:
+            weekday = (
+                pd.get_dummies(timestamps.dt.weekday.astype(str))
+                if binary
+                else timestamps.dt.weekday
+            )
+            weekday.columns = (
+                [f"weekday_{c}" for c in weekday.columns] if binary else ["weekday"]
+            )
+            T = pd.concat([T, weekday], axis="columns")
+        if "hour" in self.resolution:
+            hour = (
+                pd.get_dummies(timestamps.dt.hour.astype(str))
+                if binary
+                else timestamps.dt.hour
+            )
+            hour.columns = [f"hour_{c}" for c in hour.columns] if binary else ["hour"]
+            T = pd.concat([T, hour], axis="columns")
+        if "minute" in self.resolution:
+            minute = (
+                pd.get_dummies(timestamps.dt.minute.astype(str))
+                if binary
+                else timestamps.dt.minute
+            )
+            minute.columns = (
+                [f"minute_{c}" for c in minute.columns] if binary else ["minute"]
+            )
+            T = pd.concat([T, minute], axis="columns")
+        if "second" in self.resolution:
+            second = (
+                pd.get_dummies(timestamps.dt.second.astype(str))
+                if binary
+                else timestamps.dt.second
+            )
+            second.columns = (
+                [f"second_{c}" for c in second.columns] if binary else ["second"]
+            )
+            T = pd.concat([T, second], axis="columns")
+
+        # add the forecasting horizon to the timestamp features
+        T = self.series_to_supervised(
+            T, n_backward=0, n_forward=self.forecast_window + 1, dropnan=True
+        )
+
+        return T
 
     def predict_ahead(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -348,14 +477,14 @@ class Forecasting(BaseModel):
         predictions = pd.DataFrame(predictions).reset_index(drop=True).T
         return predictions
 
-    def roll(self, verbose: bool = True) -> None:
+    def roll(self, verbose: int = 1) -> None:
         """
         Make rolling forecasts with a model
 
         Parameters
         ----------
-        verbose : bool
-            should the forecasting error be printed out?
+        verbose : int
+            should the forecasting error be printed out? (0 - no, 1 - yes)
         """
         for step in range(
             self.train_samples,
@@ -363,9 +492,10 @@ class Forecasting(BaseModel):
             self.forecast_frequency,
         ):
             # train a model and make a forecast
-            # df_train = self.stream_data(self._data, step - self.train_samples, step)
-            df_train = self.stream_data(self._data, 0, step)
-            predicted = self.predict_ahead(df_train)
+            df = self.stream_data(
+                self._data, step - self.train_samples, step
+            ).reset_index(drop=True)
+            predicted = self.predict_ahead(df)
             actual = (
                 self.stream_data(
                     self._data[[self.output]], step + 1, step + 1 + self.forecast_window
@@ -405,7 +535,7 @@ class Forecasting(BaseModel):
             )
 
             # report the percent error
-            if verbose:
+            if verbose != 0:
                 print(
                     f"time={error.index[0]}, error={np.round(error.values[0] * 100, 2)[0]}%"
                 )

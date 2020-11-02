@@ -3,20 +3,17 @@
 Stream data through a lasso regression model to produce a rolling forecast
 
 @author: Nick
-
-UPDATE with history_inputs and forecast_inputs
 """
 
+import warnings
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import Lasso, LassoCV
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.utils._testing import ignore_warnings
-from sklearn.exceptions import ConvergenceWarning
 from forecast import Forecasting
 
 
@@ -29,16 +26,20 @@ class Regression(Forecasting):
     Parameters
     ----------
     csv : str
-        CSV file of a data frame -> "example.csv"
+        name of (or path to) CSV file of a data frame
 
     output : str
-        name of column to predict in a model -> "Y"
+        name of column to predict in a model
 
-    inputs : list, default=None
-        names of columns to use as features in a model -> ["X1", "X2"]
+    inputs : list of str, default=None
+        names of columns to use as features in a model
 
     datetime : str, default=None
         name of column to use as an index for the predictions
+
+    resolution : list of str, default=None
+        name of time intervals to use as features in a model
+            options: year, quarter, month, week, dayofyear, day, weekday, hour, minute, second
 
     train_samples : int, default=100
         the number of observations to train the model with
@@ -94,44 +95,52 @@ class Regression(Forecasting):
             the forecast -> (1 row, W columns) where W is the forecast_window
         """
         # split up inputs (X) and outputs (Y)
-        X = df[self.inputs].copy()
+        X = df[self.inputs].copy() if not self.inputs is None else pd.DataFrame()
         Y = df[[self.output]].copy()
 
         # add autoregressive terms to X, add forecast horizon to Y
         X2, Y = self.reshape_output(Y)
         X = pd.concat([X, X2], axis="columns")
 
+        # add the timestamp features to X
+        if not self.resolution is None and not self.datetime is None:
+            try:
+                T = self.time_features(df[[self.datetime]].copy(), binary=True)
+                X = pd.concat([X, T], axis="columns")
+            except:
+                print("Cannot parse 'datetime' into a datetime object, no time features were added to the model")
+
         # use the last row to predict the horizon
         X_new = X[-1:].copy()
 
+        # remove missing values
+        df = pd.concat([X, Y], axis="columns").dropna()
+        X = df[X.columns]
+        Y = df[Y.columns]
+
         if self._counter >= self.train_frequency or self._model is None:
             object.__setattr__(self, "_counter", 0)
-
-            # remove missing values
-            df = pd.concat([X, Y], axis="columns").dropna()
-            X = df[X.columns]
-            Y = df[Y.columns]
 
             # set up the machine learning model
             if self.tune_model:
                 # set up cross validation for time series
                 tscv = TimeSeriesSplit(n_splits=3)
                 folds = tscv.get_n_splits(X)
-                model = LassoCV(cv=folds, eps=1e-9, n_alphas=16, n_jobs=1)
+                model = LassoCV(cv=folds, eps=1e-9, n_alphas=16, n_jobs=-1)
             else:
-                model = Lasso(alpha=0.25, warm_start=True)
+                model = Lasso(alpha=0.1)
 
             # set up a machine learning pipeline
             pipeline = Pipeline(
                 [
                     ("var", VarianceThreshold()),
-                    # ("poly", PolynomialFeatures(2)),  # makes run time longer
                     ("scale", MinMaxScaler()),
-                    ("model", MultiOutputRegressor(model, n_jobs=1)),
+                    ("model", MultiOutputRegressor(model)),
                 ]
             )
 
-            with ignore_warnings(category=ConvergenceWarning):  # ignore common warning
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # ignore common warning
                 object.__setattr__(
                     self, "_model", pipeline.fit(X, Y)  # train the model
                 )

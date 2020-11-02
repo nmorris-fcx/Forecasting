@@ -1,9 +1,9 @@
 {
     "csv": "test/bikes.csv",
     "output": "count",
-    "history_inputs": ["weather", "temp", "atemp", "humidity", "windspeed"],
-    "forecast_inputs": ["season", "holiday", "workingday"],
+    "inputs": ["season", "holiday", "workingday", "weather", "temp", "atemp", "humidity", "windspeed"],
     "datetime": "datetime",
+    "resolution": ["hour", "weekday"],
     "train_samples": 720,
     "history_window": 6,
     "forecast_window": 24,
