@@ -105,10 +105,12 @@ class Regression(Forecasting):
         # add the timestamp features to X
         if not self.resolution is None and not self.datetime is None:
             try:
-                T = self.time_features(df[[self.datetime]].copy(), binary=True)
+                T = self.time_features(df[[self.datetime]].copy(), binary=True, history=False)
                 X = pd.concat([X, T], axis="columns")
             except:
-                print("Cannot parse 'datetime' into a datetime object, no time features were added to the model")
+                print(
+                    "Cannot parse 'datetime' into a datetime object, no time features were added to the model"
+                )
 
         # use the last row to predict the horizon
         X_new = X[-1:].copy()

@@ -308,7 +308,9 @@ class Forecasting(BaseModel):
         y = df.drop(columns=x.columns)
         return x, y
 
-    def time_features(self, df: pd.DataFrame, binary: bool = True) -> pd.DataFrame:
+    def time_features(
+        self, df: pd.DataFrame, binary: bool = True, history: bool = False
+    ) -> pd.DataFrame:
         """
         Extract features from a datetime column
 
@@ -316,9 +318,12 @@ class Forecasting(BaseModel):
         ----------
         df : pandas DataFrame
             the available data with a datetime column
-        
-        binary : bool
+
+        binary : bool, default=True
             should the time features be converted into binary variables?
+
+        history : bool, default=False
+            should backward lags be computed for the time features?
 
         Returns
         -------
@@ -442,11 +447,39 @@ class Forecasting(BaseModel):
             T = pd.concat([T, second], axis="columns")
 
         # add the forecasting horizon to the timestamp features
+        n_backward = self.history_window if history else 0
         T = self.series_to_supervised(
-            T, n_backward=0, n_forward=self.forecast_window + 1, dropnan=True
+            T, n_backward=n_backward, n_forward=self.forecast_window + 1, dropnan=False
         )
+        T = T.iloc[:-self.forecast_window]  # remove the last 
 
         return T
+
+    def rolling_stats(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute rolling statistics on a data frame:
+            Mean, Min, Max, Std Dev
+
+        Parameters
+        ----------
+        df : pandas DataFrame
+            the available data
+
+        Returns
+        -------
+        S : pandas DataFrame
+            the rolling statistics
+        """
+        Avg = df.rolling(self.history_window).mean()
+        Avg.columns = [f"{c}_avg" for c in Avg.columns]
+        Min = df.rolling(self.history_window).min()
+        Min.columns = [f"{c}_min" for c in Min.columns]
+        Max = df.rolling(self.history_window).max()
+        Max.columns = [f"{c}_max" for c in Max.columns]
+        Std = df.rolling(self.history_window).std()
+        Std.columns = [f"{c}_stdDev" for c in Std.columns]
+        S = pd.concat([Avg, Min, Max, Std], axis="columns")
+        return S
 
     def predict_ahead(self, df: pd.DataFrame) -> pd.DataFrame:
         """
