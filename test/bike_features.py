@@ -56,12 +56,13 @@ def series_to_supervised(data, n_backward=1, n_forward=1, dropnan=False):
         agg.dropna(inplace=True)
     return agg
 
+
 def corr_cluster(df, method="ward"):
     # reorder columns based on hierarchical clustering
     X = df.corr().values
     d = sch.distance.pdist(X)
     L = sch.linkage(d, method=method)
-    ind = sch.fcluster(L, 0.5*d.max(), "distance")
+    ind = sch.fcluster(L, 0.5 * d.max(), "distance")
     columns = [df.columns.tolist()[i] for i in list((np.argsort(ind)))]
     df = df.reindex(columns, axis=1)
 
@@ -132,7 +133,9 @@ autocorr = lags.corrwith(data["count"]).reset_index()
 autocorr.columns = ["Lag", "Correlation"]
 
 # compute correlation matrix
-corr = corr_cluster(data[["temp", "atemp", "humidity", "windspeed", "count"]].astype(float)).reset_index()
+corr = corr_cluster(
+    data[["temp", "atemp", "humidity", "windspeed", "count"]].astype(float)
+).reset_index()
 corr = pd.melt(corr, id_vars="index")
 corr.columns = ["variable 1", "variable 2", "correlation"]
 

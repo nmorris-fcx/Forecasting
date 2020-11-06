@@ -21,7 +21,6 @@ from forecast import Forecasting
 from lasso import Regression
 
 # In[1]: Prepare the data for modeling
-
 data = pd.read_csv("test/bikes.csv")
 
 # convert season and weather into binary variables
@@ -41,7 +40,11 @@ config["csv"] = "test/bikes_v2.csv"
 config["inputs"] = data.drop(
     columns=["datetime", "count", "casual", "registered"]
 ).columns.tolist()
-# config["resolution"] = None
+
+# test features
+config["inputs"] = None
+config["resolution"] = None
+config["input_history"] = False
 
 # In[2]: Model the data
 

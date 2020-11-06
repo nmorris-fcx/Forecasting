@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures, QuantileTransformer
 from sklearn.linear_model import Lasso, LassoCV
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.model_selection import TimeSeriesSplit
@@ -19,9 +19,9 @@ from forecast import Forecasting
 
 class Regression(Forecasting):
     """
-    A lasso regression forecasting model:
-        model = Regression(**kwarg)
-        model.roll(verbose=1)
+    A base class that can be inherited by a machine learning class to
+    produce a model's rolling forecast -> redefine 'predict_ahead' method
+    By default this class builds an Exponential Smoothing model
 
     Parameters
     ----------
@@ -46,6 +46,10 @@ class Regression(Forecasting):
 
     history_window : int, default=10
         the number of past time periods used as features in the model
+
+    input_history : bool, default=False
+        should backward lags be computed for input variables to use as features in the model
+        by default, backward lags are only computed for the output variable
 
     forecast_window : int, default=10
         the number of time periods in the future to predict
@@ -98,14 +102,29 @@ class Regression(Forecasting):
         X = df[self.inputs].copy() if not self.inputs is None else pd.DataFrame()
         Y = df[[self.output]].copy()
 
-        # add autoregressive terms to X, add forecast horizon to Y
-        X2, Y = self.reshape_output(Y)
-        X = pd.concat([X, X2], axis="columns")
+        if self.input_history:
+            # add autoregressive terms (on X) to X
+            Ax = self.series_to_supervised(
+                X, n_backward=self.history_window, n_forward=0
+            )
 
-        # add the timestamp features to X
+            # add rolling statistics (on X) to X
+            Sx = self.rolling_stats(X)
+            X = pd.concat([X, Ax, Sx], axis="columns")
+
+        # add rolling statistics (on Y) to X
+        Sy = self.rolling_stats(Y)
+        X = pd.concat([X, Sy], axis="columns")
+
+        # add autoregressive terms (on Y) to X
+        # add forecast horizon to Y
+        Ay, Y = self.reshape_output(Y)
+        X = pd.concat([X, Ay], axis="columns")
+
+        # add timestamp features to X
         if not self.resolution is None and not self.datetime is None:
             try:
-                T = self.time_features(df[[self.datetime]].copy(), binary=True, history=False)
+                T = self.time_features(df[[self.datetime]], binary=True)
                 X = pd.concat([X, T], axis="columns")
             except:
                 print(
@@ -136,6 +155,9 @@ class Regression(Forecasting):
             pipeline = Pipeline(
                 [
                     ("var", VarianceThreshold()),
+                    # ('poly', PolynomialFeatures(2)),  # longer run time, potentially more accurate
+                    # ('var2', VarianceThreshold()),  # use this if 'poly' is used
+                    # ('shape', QuantileTransformer(output_distribution="normal"))  # make input variables normally distributed
                     ("scale", MinMaxScaler()),
                     ("model", MultiOutputRegressor(model)),
                 ]

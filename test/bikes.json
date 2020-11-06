@@ -6,6 +6,7 @@
     "resolution": ["hour", "weekday"],
     "train_samples": 720,
     "history_window": 6,
+    "input_history": false,
     "forecast_window": 1,
     "forecast_frequency": 1,
     "train_frequency": 1,

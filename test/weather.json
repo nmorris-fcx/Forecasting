@@ -4,9 +4,10 @@
     "inputs": null,
     "datetime": "date",
     "resolution": ["week", "month"],
-    "train_samples": 720,
+    "train_samples": 400,
     "history_window": 6,
-    "forecast_window": 1,
+    "input_history": false,
+    "forecast_window": 7,
     "forecast_frequency": 1,
     "train_frequency": 1,
     "tune_model": false

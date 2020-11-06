@@ -44,6 +44,10 @@ class Forecasting(BaseModel):
     history_window : int, default=10
         the number of past time periods used as features in the model
 
+    input_history : bool, default=False
+        should backward lags be computed for input variables to use as features in the model
+        by default, backward lags are only computed for the output variable
+
     forecast_window : int, default=10
         the number of time periods in the future to predict
 
@@ -85,6 +89,7 @@ class Forecasting(BaseModel):
     resolution: Union[List[str], None] = None
     train_samples: int = 100
     history_window: int = 10
+    input_history: bool = False
     forecast_window: int = 10
     forecast_frequency: int = 1
     train_frequency: int = 5
@@ -262,7 +267,7 @@ class Forecasting(BaseModel):
             the requested data reshaped
         """
         n_vars = 1 if type(df) is list else df.shape[1]
-        df = pd.DataFrame(df)
+        df = pd.DataFrame(df.copy())
         cols, names = list(), list()
         # input sequence (t-n, ... t-1)
         for i in range(n_backward, 0, -1):
@@ -302,15 +307,13 @@ class Forecasting(BaseModel):
             the forward lagged features (outputs)
         """
         df = self.series_to_supervised(
-            df[[self.output]].copy(), self.history_window, self.forecast_window + 1
+            df[[self.output]], self.history_window, self.forecast_window + 1
         )
         x = df.iloc[:, : (self.history_window + 1)]
         y = df.drop(columns=x.columns)
         return x, y
 
-    def time_features(
-        self, df: pd.DataFrame, binary: bool = True, history: bool = False
-    ) -> pd.DataFrame:
+    def time_features(self, df: pd.DataFrame, binary: bool = True) -> pd.DataFrame:
         """
         Extract features from a datetime column
 
@@ -338,7 +341,7 @@ class Forecasting(BaseModel):
             raise ValueError(
                 "'datetime' should be a column name in 'df', got None instead"
             )
-        timestamps = pd.to_datetime(df[self.datetime])
+        timestamps = pd.to_datetime(df[self.datetime].copy())
 
         # extend the timestamps to include the forecast horizon
         delta = timestamps[-1:].values[0] - timestamps[-2:-1].values[0]
@@ -447,11 +450,13 @@ class Forecasting(BaseModel):
             T = pd.concat([T, second], axis="columns")
 
         # add the forecasting horizon to the timestamp features
-        n_backward = self.history_window if history else 0
+        n_backward = self.history_window if self.input_history else 0
         T = self.series_to_supervised(
             T, n_backward=n_backward, n_forward=self.forecast_window + 1, dropnan=False
         )
-        T = T.iloc[:-self.forecast_window]  # remove the last 
+        T = T.iloc[
+            : -self.forecast_window
+        ]  # remove the last set of rows with missing values
 
         return T
 
@@ -470,13 +475,15 @@ class Forecasting(BaseModel):
         S : pandas DataFrame
             the rolling statistics
         """
-        Avg = df.rolling(self.history_window).mean()
+        df = df.copy()
+        # rolling stats are shifted backward by 1 to enforce that only previous values are used in computation
+        Avg = df.rolling(self.history_window).mean().shift(1)
         Avg.columns = [f"{c}_avg" for c in Avg.columns]
-        Min = df.rolling(self.history_window).min()
+        Min = df.rolling(self.history_window).min().shift(1)
         Min.columns = [f"{c}_min" for c in Min.columns]
-        Max = df.rolling(self.history_window).max()
+        Max = df.rolling(self.history_window).max().shift(1)
         Max.columns = [f"{c}_max" for c in Max.columns]
-        Std = df.rolling(self.history_window).std()
+        Std = df.rolling(self.history_window).std().shift(1)
         Std.columns = [f"{c}_stdDev" for c in Std.columns]
         S = pd.concat([Avg, Min, Max, Std], axis="columns")
         return S
