@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 
 from forecast import Forecasting
 from lasso import Regression
+from forest import Forest
+from nnet import MLP
 
 # In[1]: Prepare the data for modeling
 data = pd.read_csv("test/bikes.csv")
@@ -42,18 +44,45 @@ config["inputs"] = data.drop(
 ).columns.tolist()
 
 # test features
-config["inputs"] = None
-config["resolution"] = None
+# config["inputs"] = None
+# config["resolution"] = None
 config["input_history"] = False
 
 # In[2]: Model the data
 
-# produce a rolling forecast
-model = Regression(**config)
-model.roll(verbose=True)
-print(f"Average Error: {np.round(model._error.mean()[0] * 100, 2)}%")
+# produce a random forest rolling forecast
+print("---- Random Forest ----")
+model2 = Forest(**config)
+model2.roll(verbose=True)
+print(f"Forest Average Error: {np.round(model2._error.mean()[0] * 100, 2)}%")
+
+# produce a lasso regression rolling forecast
+print("---- Lasso Regression ----")
+model1 = Regression(**config)
+model1.roll(verbose=True)
+print(f"Lasso Average Error: {np.round(model1._error.mean()[0] * 100, 2)}%")
+
+# produce a neural network rolling forecast
+print("---- Neural Network ----")
+model3 = MLP(**config)
+model3.roll(verbose=True)
+print(f"NNet Average Error: {np.round(model3._error.mean()[0] * 100, 2)}%")
+
+# produce a baseline rolling forecast (exponential smoothing)
+print("---- Exponential Smoothing ----")
+baseline_model = Forecasting(**config)
+baseline_model.roll(verbose=True)
+print(f"Baseline Average Error: {np.round(baseline_model._error.mean()[0] * 100, 2)}%")
+
+# print(f"Baseline Average Error: {np.round(baseline_model._error.mean()[0] * 100, 2)}%")
+# print(f"Lasso Average Error: {np.round(model1._error.mean()[0] * 100, 2)}%")
+# print(f"Forest Average Error: {np.round(model2._error.mean()[0] * 100, 2)}%")
+# print(f"NNet Average Error: {np.round(model3._error.mean()[0] * 100, 2)}%")
 
 # In[3]: Analyze the model
+
+# pick a model
+model = model2
 
 # pick a step ahead to evaluate
 step_ahead = 1
@@ -70,7 +99,7 @@ print(
 )
 
 # plot the prediction series
-fig = px.scatter(df, x="index", y="Predict")
+fig = px.line(df, x="index", y="Predict")
 fig.add_trace(
     go.Scatter(
         x=df["index"], y=df["Actual"], mode="lines", showlegend=False, name="Actual"

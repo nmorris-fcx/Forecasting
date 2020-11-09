@@ -20,6 +20,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 
 from forecast import Forecasting
 from lasso import Regression
+from forest import Forest
+from nnet import MLP, DenseNet
+from pls import PLS
+from bayes import Bayes
 
 # In[1]: Prepare the data for modeling
 data = (
@@ -38,7 +42,9 @@ text = data[["events"]].astype(str)
 matrix = pd.DataFrame()
 for c in text.columns:
     vector = TfidfVectorizer()
-    matrix2 = vector.fit_transform(text[c].tolist())  # collect the unique words and compute their inverse frequencies for each sample
+    matrix2 = vector.fit_transform(
+        text[c].tolist()
+    )  # collect the unique words and compute their inverse frequencies for each sample
     matrix2 = pd.DataFrame(matrix2.toarray(), columns=vector.get_feature_names())
     matrix2.columns = [f"{c}_{i}" for i in matrix2.columns]
     matrix = pd.concat([matrix, matrix2], axis="columns")
@@ -48,7 +54,7 @@ data = data.drop(columns=["events"])
 data = pd.concat([data, matrix], axis="columns")
 
 # fill in missing values with linear interpolation
-# then backfill incase the first row contains missing values
+# then backfill incase the first row(s) contains missing values
 Auckland = (
     data.loc[data["city"] == "Auckland"].copy().interpolate().fillna(method="bfill")
 )
@@ -79,22 +85,54 @@ config["inputs"] = data.drop(columns=["city", "date", "avg_temp"]).columns.tolis
 # test features
 # config["inputs"] = None
 # config["resolution"] = None
-config["input_history"] = True
+config["input_history"] = False
 
 # In[2]: Model the data
 
-# produce a rolling forecast
-model = Regression(**config)
-model.roll(verbose=True)
+# produce a bayesian ridge regression rolling forecast
+print("---- Bayesian Ridge Regression ----")
+model5 = Bayes(**config)
+model5.roll(verbose=True)
+print(f"Bayesian Average Error: {np.round(model5._error.mean()[0] * 100, 2)}%")
 
-# compare model with baseline (exponential smoothing)
+print("---- PLS ----")
+model4 = PLS(**config)
+model4.roll(verbose=True)
+print(f"PLS Average Error: {np.round(model4._error.mean()[0] * 100, 2)}%")
+
+# produce a neural network rolling forecast
+print("---- Neural Network ----")
+model3 = MLP(**config)
+model3.roll(verbose=True)
+print(f"NNet Average Error: {np.round(model3._error.mean()[0] * 100, 2)}%")
+
+# produce a random forest rolling forecast
+print("---- Random Forest ----")
+model2 = Forest(**config)
+model2.roll(verbose=True)
+print(f"Forest Average Error: {np.round(model2._error.mean()[0] * 100, 2)}%")
+
+# produce a lasso regression rolling forecast
+print("---- Lasso Regression ----")
+model1 = Regression(**config)
+model1.roll(verbose=True)
+print(f"Lasso Average Error: {np.round(model1._error.mean()[0] * 100, 2)}%")
+
+# produce a baseline rolling forecast (exponential smoothing)
+print("---- Exponential Smoothing ----")
 baseline_model = Forecasting(**config)
 baseline_model.roll(verbose=True)
-
-print(f"Lasso Average Error: {np.round(model._error.mean()[0] * 100, 2)}%")
 print(f"Baseline Average Error: {np.round(baseline_model._error.mean()[0] * 100, 2)}%")
 
+# print(f"Baseline Average Error: {np.round(baseline_model._error.mean()[0] * 100, 2)}%")
+# print(f"Lasso Average Error: {np.round(model1._error.mean()[0] * 100, 2)}%")
+# print(f"Forest Average Error: {np.round(model2._error.mean()[0] * 100, 2)}%")
+# print(f"NNet Average Error: {np.round(model3._error.mean()[0] * 100, 2)}%")
+
 # In[3]: Analyze the model
+
+# pick a model
+model = model2
 
 # pick a step ahead to evaluate
 step_ahead = 1
@@ -111,7 +149,7 @@ print(
 )
 
 # plot the prediction series
-fig = px.scatter(df, x="index", y="Predict")
+fig = px.line(df, x="index", y="Predict")
 fig.add_trace(
     go.Scatter(
         x=df["index"], y=df["Actual"], mode="lines", showlegend=False, name="Actual"
@@ -119,3 +157,13 @@ fig.add_trace(
 )
 fig.update_layout(font=dict(size=16))
 fig.show()
+
+# draw a parity plot
+fig1 = px.scatter(df, x="Actual", y="Predict")
+fig1.add_trace(
+    go.Scatter(
+        x=df["Actual"], y=df["Actual"], mode="lines", showlegend=False, name="Actual"
+    )
+)
+fig1.update_layout(font=dict(size=16))
+fig1.show()
